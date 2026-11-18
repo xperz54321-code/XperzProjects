@@ -117,18 +117,21 @@ for source_file in \
     if [ ! -f "$source_file" ]; then
         continue
     fi
-    case "$source_file" in
-        *.sources)
-            awk 'BEGIN { RS = ""; ORS = "\n\n" } !/file:\/cdrom|cdrom:/ { print }' \
-                "$source_file" >"$source_file.xperz"
-            mv -f "$source_file.xperz" "$source_file"
-            ;;
-        *)
-            sed -i -E '/^[[:space:]]*deb(-src)?[[:space:]].*(cdrom:|file:\/cdrom)/d' \
-                "$source_file"
-            ;;
-    esac
+    rm -f "$source_file"
 done
+cat >"$SOURCES" <<'EOF'
+Types: deb
+URIs: http://archive.ubuntu.com/ubuntu/
+Suites: resolute resolute-updates resolute-backports
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+Types: deb
+URIs: http://security.ubuntu.com/ubuntu/
+Suites: resolute-security
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+EOF
 for component in universe multiverse; do
     if ! grep -E '^Components:' "$SOURCES" | grep -qw "$component"; then
         sed -i "/^Components:/ s/\$/ $component/" "$SOURCES"
