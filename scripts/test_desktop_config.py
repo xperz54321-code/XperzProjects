@@ -58,14 +58,27 @@ def main():
         if marker not in build_script:
             raise ValueError(f"Ubuntu remaster script is missing required behavior: {marker}")
 
-    squashfs_staged = build_script.index('mv -f "$NEW_SQUASHFS" "$SQUASHFS"')
+    squashfs_staged = build_script.index(
+        'mv -f "$NEW_SQUASHFS" "$ISO_TREE/casper/minimal.standard.live.xperz.squashfs"'
+    )
     checksums_generated = build_script.index('find . -type f ! -name md5sum.txt')
     if squashfs_staged > checksums_generated:
         raise ValueError("The ISO checksum manifest must be generated after staging the new filesystem.")
+    for marker in (
+        "minimal.squashfs",
+        "minimal.standard.squashfs",
+        "minimal.standard.live.squashfs",
+        "mount -t overlay overlay",
+        "layerfs-path=minimal.standard.live.xperz.squashfs",
+        'mksquashfs "$UPPER"',
+    ):
+        if marker not in build_script:
+            raise ValueError(f"Layered Ubuntu remaster is missing required behavior: {marker}")
 
     workflow = WORKFLOW.read_text(encoding="utf-8")
     for marker in (
         "workflow_dispatch:",
+        "desktop/build.sh",
         "601e30fbf5d97759367c632e2c33630665039b7e2158fd068403da3ccf1bda1f",
         "qemu-system-x86_64",
         "OVMF_CODE_4M.fd",
@@ -73,6 +86,8 @@ def main():
     ):
         if marker not in workflow:
             raise ValueError(f"Hosted build workflow is missing required behavior: {marker}")
+    if "mount -t overlay overlay" not in build_script:
+        raise ValueError("The live remaster must support Ubuntu's layered Casper filesystem.")
 
     ET.parse(WALLPAPER)
     ET.parse(LOGO)

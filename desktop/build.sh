@@ -60,6 +60,16 @@ MICROSOFT_KEY="$BUILD_DIR/microsoft.asc"
 MD5SUMS="$BUILD_DIR/md5sum.txt"
 MANIFEST="$BUILD_DIR/filesystem.manifest"
 FILESYSTEM_SIZE="$BUILD_DIR/filesystem.size"
+LEGACY_SQUASHFS="$ISO_TREE/casper/filesystem.squashfs"
+BASE_LAYER="$ISO_TREE/casper/minimal.squashfs"
+STANDARD_LAYER="$ISO_TREE/casper/minimal.standard.squashfs"
+LIVE_LAYER="$ISO_TREE/casper/minimal.standard.live.squashfs"
+BASE_MOUNT="$BUILD_DIR/layer-base"
+STANDARD_MOUNT="$BUILD_DIR/layer-standard"
+LIVE_MOUNT="$BUILD_DIR/layer-live"
+UPPER="$BUILD_DIR/upper"
+OVERLAY_WORK="$BUILD_DIR/overlay-work"
+IMAGE_MODE=legacy
 
 cleanup_mounts() {
     for path in "$ROOTFS/run" "$ROOTFS/sys" "$ROOTFS/dev"; do
@@ -67,17 +77,33 @@ cleanup_mounts() {
             umount -R "$path" || umount -lf "$path" || true
         fi
     done
+    for path in "$ROOTFS" "$LIVE_MOUNT" "$STANDARD_MOUNT" "$BASE_MOUNT"; do
+        if [ -d "$path" ] && mountpoint -q "$path"; then
+            umount "$path" || umount -lf "$path" || true
+        fi
+    done
 }
 trap cleanup_mounts EXIT HUP INT TERM
 
 xorriso -osirrox on -indev "$UBUNTU_ISO" -extract / "$ISO_TREE" \
     >"$BUILD_DIR/extract.log" 2>&1
-SQUASHFS="$ISO_TREE/casper/filesystem.squashfs"
-if [ ! -s "$SQUASHFS" ]; then
-    printf '%s\n' "The source ISO has no casper/filesystem.squashfs live system." >&2
+if [ -s "$LEGACY_SQUASHFS" ]; then
+    unsquashfs -d "$ROOTFS" "$LEGACY_SQUASHFS" >"$BUILD_DIR/unsquashfs.log" 2>&1
+elif [ -s "$BASE_LAYER" ] && [ -s "$STANDARD_LAYER" ] && [ -s "$LIVE_LAYER" ]; then
+    IMAGE_MODE=layered
+    mkdir -p "$ROOTFS" "$UPPER" "$OVERLAY_WORK" \
+        "$BASE_MOUNT" "$STANDARD_MOUNT" "$LIVE_MOUNT"
+    mount -t squashfs -o loop,ro "$BASE_LAYER" "$BASE_MOUNT"
+    mount -t squashfs -o loop,ro "$STANDARD_LAYER" "$STANDARD_MOUNT"
+    mount -t squashfs -o loop,ro "$LIVE_LAYER" "$LIVE_MOUNT"
+    mount -t overlay overlay \
+        -o "lowerdir=$LIVE_MOUNT:$STANDARD_MOUNT:$BASE_MOUNT,upperdir=$UPPER,workdir=$OVERLAY_WORK" \
+        "$ROOTFS"
+else
+    printf '%s\n' "The source ISO has no supported Ubuntu Casper live filesystem layout." >&2
+    printf '%s\n' "Expected casper/filesystem.squashfs or the three 26.04 layered images." >&2
     exit 1
 fi
-unsquashfs -d "$ROOTFS" "$SQUASHFS" >"$BUILD_DIR/unsquashfs.log" 2>&1
 
 SOURCES="$ROOTFS/etc/apt/sources.list.d/ubuntu.sources"
 if [ ! -f "$SOURCES" ]; then
@@ -128,7 +154,22 @@ printf '%s\n' "Xperz OS 26.04.1 LTS amd64" >"$ISO_TREE/.disk/info"
 if [ -f "$ISO_TREE/boot/grub/grub.cfg" ]; then
     sed -i 's/Ubuntu/Xperz OS/g' "$ISO_TREE/boot/grub/grub.cfg"
 fi
-rm -f "$ISO_TREE/casper/filesystem.squashfs.gpg"
+if [ "$IMAGE_MODE" = layered ]; then
+    GRUB_CFG="$ISO_TREE/boot/grub/grub.cfg"
+    if [ ! -f "$GRUB_CFG" ] || ! grep -q '/casper/vmlinuz' "$GRUB_CFG"; then
+        printf '%s\n' "The layered Ubuntu ISO has no supported GRUB live boot entry." >&2
+        exit 1
+    fi
+    sed -i -E \
+        '/^[[:space:]]*linux[[:space:]].*\/casper\/vmlinuz/ { s/layerfs-path=[^[:space:]]*/layerfs-path=minimal.standard.live.xperz.squashfs/; /layerfs-path=/! s/[[:space:]]*$/ layerfs-path=minimal.standard.live.xperz.squashfs/; }' \
+        "$GRUB_CFG"
+    if ! grep -q 'layerfs-path=minimal.standard.live.xperz.squashfs' "$GRUB_CFG"; then
+        printf '%s\n' "Failed to point the Casper boot entry at the Xperz live layer." >&2
+        exit 1
+    fi
+else
+    rm -f "$ISO_TREE/casper/filesystem.squashfs.gpg"
+fi
 
 POLICY_RC_CREATED=0
 if [ ! -e "$ROOTFS/usr/sbin/policy-rc.d" ]; then
@@ -164,27 +205,37 @@ chroot "$ROOTFS" apt-get clean
 if [ "$POLICY_RC_CREATED" -eq 1 ]; then
     rm -f "$ROOTFS/usr/sbin/policy-rc.d"
 fi
+du -sx --block-size=1 "$ROOTFS" | awk '{ print $1 }' >"$FILESYSTEM_SIZE"
 cleanup_mounts
 trap - EXIT HUP INT TERM
 
 sort -o "$MANIFEST" "$MANIFEST"
-du -sx --block-size=1 "$ROOTFS" | awk '{ print $1 }' >"$FILESYSTEM_SIZE"
-mksquashfs "$ROOTFS" "$NEW_SQUASHFS" -comp xz -b 1M -noappend -processors "$(nproc)"
-mv -f "$NEW_SQUASHFS" "$SQUASHFS"
-cp "$MANIFEST" "$ISO_TREE/casper/filesystem.manifest"
-cp "$FILESYSTEM_SIZE" "$ISO_TREE/casper/filesystem.size"
+if [ "$IMAGE_MODE" = layered ]; then
+    mksquashfs "$UPPER" "$NEW_SQUASHFS" -comp xz -b 1M -noappend -processors "$(nproc)"
+    mv -f "$NEW_SQUASHFS" "$ISO_TREE/casper/minimal.standard.live.xperz.squashfs"
+else
+    mksquashfs "$ROOTFS" "$NEW_SQUASHFS" -comp xz -b 1M -noappend -processors "$(nproc)"
+    mv -f "$NEW_SQUASHFS" "$LEGACY_SQUASHFS"
+    cp "$MANIFEST" "$ISO_TREE/casper/filesystem.manifest"
+    cp "$FILESYSTEM_SIZE" "$ISO_TREE/casper/filesystem.size"
+fi
 (
     cd "$ISO_TREE"
     find . -type f ! -name md5sum.txt -print0 | sort -z | xargs -0 md5sum >"$MD5SUMS"
 )
 
-set -- \
-    -indev "$UBUNTU_ISO" \
-    -outdev "$TEMP_ISO" \
-    -overwrite on \
-    -map "$SQUASHFS" /casper/filesystem.squashfs \
-    -map "$ISO_TREE/casper/filesystem.manifest" /casper/filesystem.manifest \
-    -map "$ISO_TREE/casper/filesystem.size" /casper/filesystem.size \
+set -- -indev "$UBUNTU_ISO" -outdev "$TEMP_ISO" -overwrite on
+if [ "$IMAGE_MODE" = layered ]; then
+    set -- "$@" \
+        -map "$ISO_TREE/casper/minimal.standard.live.xperz.squashfs" \
+        /casper/minimal.standard.live.xperz.squashfs
+else
+    set -- "$@" \
+        -map "$LEGACY_SQUASHFS" /casper/filesystem.squashfs \
+        -map "$ISO_TREE/casper/filesystem.manifest" /casper/filesystem.manifest \
+        -map "$ISO_TREE/casper/filesystem.size" /casper/filesystem.size
+fi
+set -- "$@" \
     -map "$MD5SUMS" /md5sum.txt \
     -map "$ISO_TREE/.disk/info" /.disk/info
 if [ -f "$ISO_TREE/boot/grub/grub.cfg" ]; then

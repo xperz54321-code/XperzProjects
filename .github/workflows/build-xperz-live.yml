@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - .github/workflows/build-xperz-live.yml
+      - desktop/build.sh
 
 permissions:
   contents: read

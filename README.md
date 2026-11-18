@@ -45,14 +45,14 @@ free on the scratch drive and 8 GiB on the output drive. Package repositories
 change over time, so separate builds are not guaranteed to be byte-identical.
 
 If Linux is unavailable locally, `.github/workflows/build-xperz-live.yml` can
-build the image on a GitHub-hosted Linux runner. A push adding the workflow
-starts its first build; once the workflow is on the default branch, it can
-also be started from the repository's Actions tab. It downloads and verifies
-the Ubuntu source without changing the local original, remasters it, checks
-BIOS and UEFI boot entries, and smoke-tests both firmware paths in QEMU/OVMF.
-Download the `Xperz-26.04.1-live-amd64` artifact, which is retained for seven
-days. The remaster has not been boot-tested on every PC; QEMU checks only the
-emulated BIOS and UEFI paths.
+build the image on a GitHub-hosted Linux runner. Pushing changes to the
+workflow or remaster script starts a build; once the workflow is on the
+default branch, it can also be started from the repository's Actions tab. It
+downloads and verifies the Ubuntu source without changing the local original,
+remasters it, checks BIOS and UEFI boot entries, and smoke-tests both firmware
+paths in QEMU/OVMF. Download the `Xperz-26.04.1-live-amd64` artifact, which is
+retained for seven days. The remaster has not been boot-tested on every PC;
+QEMU checks only the emulated BIOS and UEFI paths.
 
 The existing `C:\Users\Admin\Downloads\Xperz.iso` from the earlier prototype
 is not a full desktop image. Do not write it to USB expecting the graphical
