@@ -64,6 +64,11 @@ def main():
     checksums_generated = build_script.index('find . -type f ! -name md5sum.txt')
     if squashfs_staged > checksums_generated:
         raise ValueError("The ISO checksum manifest must be generated after staging the new filesystem.")
+    resolver_snapshot = build_script.index('cp -a "$ROOTFS/etc/resolv.conf" "$BUILD_DIR/resolv.conf.original"')
+    resolver_restore = build_script.rindex('cp -a "$BUILD_DIR/resolv.conf.original" "$ROOTFS/etc/resolv.conf"')
+    mount_cleanup = build_script.index("\ncleanup_mounts\ntrap - EXIT HUP INT TERM")
+    if not resolver_snapshot < resolver_restore < mount_cleanup:
+        raise ValueError("The build must restore the live filesystem resolver configuration.")
     for marker in (
         "minimal.squashfs",
         "minimal.standard.squashfs",

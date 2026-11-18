@@ -178,13 +178,21 @@ if [ ! -e "$ROOTFS/usr/sbin/policy-rc.d" ]; then
     POLICY_RC_CREATED=1
 fi
 
+if [ ! -e "$ROOTFS/etc/resolv.conf" ] && [ ! -L "$ROOTFS/etc/resolv.conf" ]; then
+    printf '%s\n' "The live filesystem has no /etc/resolv.conf entry." >&2
+    exit 1
+fi
+cp -a "$ROOTFS/etc/resolv.conf" "$BUILD_DIR/resolv.conf.original"
+cp /etc/resolv.conf "$BUILD_DIR/resolv.conf.host"
+rm -f "$ROOTFS/etc/resolv.conf"
+install -m 0644 "$BUILD_DIR/resolv.conf.host" "$ROOTFS/etc/resolv.conf"
+
 mount --rbind /dev "$ROOTFS/dev"
 mount --make-rslave "$ROOTFS/dev"
 mount --rbind /sys "$ROOTFS/sys"
 mount --make-rslave "$ROOTFS/sys"
 mount --rbind /run "$ROOTFS/run"
 mount --make-rslave "$ROOTFS/run"
-cp -L /etc/resolv.conf "$ROOTFS/etc/resolv.conf"
 
 chroot "$ROOTFS" apt-get update
 set --
@@ -205,6 +213,8 @@ chroot "$ROOTFS" apt-get clean
 if [ "$POLICY_RC_CREATED" -eq 1 ]; then
     rm -f "$ROOTFS/usr/sbin/policy-rc.d"
 fi
+rm -f "$ROOTFS/etc/resolv.conf"
+cp -a "$BUILD_DIR/resolv.conf.original" "$ROOTFS/etc/resolv.conf"
 du -sx --block-size=1 "$ROOTFS" | awk '{ print $1 }' >"$FILESYSTEM_SIZE"
 cleanup_mounts
 trap - EXIT HUP INT TERM
