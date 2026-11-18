@@ -110,6 +110,25 @@ if [ ! -f "$SOURCES" ]; then
     printf '%s\n' "Ubuntu apt sources file was not found in the live filesystem." >&2
     exit 1
 fi
+for source_file in \
+    "$ROOTFS/etc/apt/sources.list" \
+    "$ROOTFS"/etc/apt/sources.list.d/*.list \
+    "$ROOTFS"/etc/apt/sources.list.d/*.sources; do
+    if [ ! -f "$source_file" ]; then
+        continue
+    fi
+    case "$source_file" in
+        *.sources)
+            awk 'BEGIN { RS = ""; ORS = "\n\n" } !/file:\/cdrom|cdrom:/ { print }' \
+                "$source_file" >"$source_file.xperz"
+            mv -f "$source_file.xperz" "$source_file"
+            ;;
+        *)
+            sed -i -E '/^[[:space:]]*deb(-src)?[[:space:]]+(cdrom:|file:\/cdrom)/d' \
+                "$source_file"
+            ;;
+    esac
+done
 for component in universe multiverse; do
     if ! grep -E '^Components:' "$SOURCES" | grep -qw "$component"; then
         sed -i "/^Components:/ s/\$/ $component/" "$SOURCES"

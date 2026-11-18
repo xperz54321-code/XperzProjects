@@ -76,6 +76,7 @@ def main():
         "mount -t overlay overlay",
         "layerfs-path=minimal.standard.live.xperz.squashfs",
         'mksquashfs "$UPPER"',
+        r"!/file:\/cdrom|cdrom:/",
     ):
         if marker not in build_script:
             raise ValueError(f"Layered Ubuntu remaster is missing required behavior: {marker}")
