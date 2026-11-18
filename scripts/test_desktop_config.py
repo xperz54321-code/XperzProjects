@@ -77,6 +77,7 @@ def main():
         "layerfs-path=minimal.standard.live.xperz.squashfs",
         'mksquashfs "$UPPER"',
         r"!/file:\/cdrom|cdrom:/",
+        "deb(-src)?[[:space:]].*(cdrom:|file:",
     ):
         if marker not in build_script:
             raise ValueError(f"Layered Ubuntu remaster is missing required behavior: {marker}")

@@ -124,7 +124,7 @@ for source_file in \
             mv -f "$source_file.xperz" "$source_file"
             ;;
         *)
-            sed -i -E '/^[[:space:]]*deb(-src)?[[:space:]]+(cdrom:|file:\/cdrom)/d' \
+            sed -i -E '/^[[:space:]]*deb(-src)?[[:space:]].*(cdrom:|file:\/cdrom)/d' \
                 "$source_file"
             ;;
     esac
