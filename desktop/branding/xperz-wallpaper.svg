@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080d19"/>
+      <stop offset=".55" stop-color="#111a2b"/>
+      <stop offset="1" stop-color="#192743"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5bf6d1"/>
+      <stop offset="1" stop-color="#7089ff"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#5bf6d1" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#5bf6d1" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#background)"/>
+  <circle cx="1470" cy="500" r="690" fill="url(#glow)"/>
+  <path d="M0 860 600 260l310 310-600 600H0Z" fill="#fff" opacity=".018"/>
+  <path d="m1200 0 720 0v720Z" fill="#fff" opacity=".018"/>
+  <g transform="translate(1340 300)" fill="none" stroke="url(#mark)" stroke-linecap="round" stroke-width="38">
+    <path d="M0 0 300 300 0 600"/>
+    <path d="M320 0 20 300l300 300"/>
+  </g>
+  <text x="140" y="506" fill="#edf4ff" font-family="Noto Sans, sans-serif" font-size="108" font-weight="700" letter-spacing="12">XPERZ</text>
+  <text x="148" y="578" fill="#95a7c3" font-family="Noto Sans, sans-serif" font-size="30" letter-spacing="8">YOUR MACHINE. YOUR RULES.</text>
+  <path d="M148 632h500" stroke="#5bf6d1" stroke-width="4" opacity=".8"/>
+  <text x="148" y="686" fill="#95a7c3" font-family="Noto Sans, sans-serif" font-size="22" letter-spacing="4">POWERED BY UBUNTU</text>
+</svg>

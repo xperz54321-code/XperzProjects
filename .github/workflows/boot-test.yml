@@ -1,0 +1,26 @@
+name: Xperz OS boot test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-boot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kernel and emulator toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential clang lld make xorriso qemu-system-x86 ovmf python3 curl ca-certificates
+      - name: Build ISO and test BIOS/UEFI boots
+        run: make test REQUIRE_UEFI=1
+      - name: Upload bootable ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: xperz-os-x86_64
+          path: build/xperz-os.iso

@@ -1,0 +1,111 @@
+name: Build Xperz Ubuntu live ISO
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/build-xperz-live.yml
+
+permissions:
+  contents: read
+
+jobs:
+  remaster:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free runner space for the desktop filesystem
+        run: |
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /usr/local/share/chromium \
+            /usr/local/share/powershell \
+            /usr/share/swift \
+            /usr/local/.ghcup
+          df -h /
+
+      - name: Install ISO remaster tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            xorriso squashfs-tools curl gnupg qemu-system-x86 ovmf
+
+      - name: Download and verify the original Ubuntu ISO
+        env:
+          SOURCE_ISO: ${{ runner.temp }}/ubuntu-26.04.1-desktop-amd64.iso
+        run: |
+          curl --fail --location --retry 5 --retry-all-errors \
+            --output "$SOURCE_ISO" \
+            https://releases.ubuntu.com/26.04.1/ubuntu-26.04.1-desktop-amd64.iso
+          echo "601e30fbf5d97759367c632e2c33630665039b7e2158fd068403da3ccf1bda1f  $SOURCE_ISO" \
+            | sha256sum --check
+
+      - name: Build branded Ubuntu live image
+        env:
+          UBUNTU_ISO: ${{ runner.temp }}/ubuntu-26.04.1-desktop-amd64.iso
+          OUTPUT_ISO: ${{ github.workspace }}/build/Xperz.iso
+          WORK_DIR: ${{ runner.temp }}/xperz-remaster
+        run: |
+          sudo env \
+            UBUNTU_ISO="$UBUNTU_ISO" \
+            OUTPUT_ISO="$OUTPUT_ISO" \
+            WORK_DIR="$WORK_DIR" \
+            ./desktop/build.sh
+          ls -lh "$OUTPUT_ISO"
+          sha256sum "$OUTPUT_ISO"
+
+      - name: Smoke-test BIOS boot with QEMU
+        env:
+          OUTPUT_ISO: ${{ github.workspace }}/build/Xperz.iso
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=10s 360s \
+            qemu-system-x86_64 \
+              -machine q35,accel=tcg -m 4096 -smp 2 \
+              -drive file="$OUTPUT_ISO",media=cdrom,readonly=on \
+              -boot d -display none -serial none -monitor none \
+              -no-reboot \
+              >"$RUNNER_TEMP/qemu-bios.log" 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 124 ]; then
+            cat "$RUNNER_TEMP/qemu-bios.log"
+            echo "QEMU BIOS boot exited before the smoke-test timeout (status $status)." >&2
+            exit 1
+          fi
+
+      - name: Smoke-test UEFI boot with QEMU and OVMF
+        env:
+          OUTPUT_ISO: ${{ github.workspace }}/build/Xperz.iso
+        run: |
+          cp /usr/share/OVMF/OVMF_VARS_4M.fd "$RUNNER_TEMP/OVMF_VARS.fd"
+          set +e
+          timeout --signal=TERM --kill-after=10s 360s \
+            qemu-system-x86_64 \
+              -machine q35,accel=tcg -m 4096 -smp 2 \
+              -drive if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
+              -drive if=pflash,format=raw,unit=1,file="$RUNNER_TEMP/OVMF_VARS.fd" \
+              -drive file="$OUTPUT_ISO",media=cdrom,readonly=on \
+              -boot d -display none -serial none -monitor none \
+              -no-reboot \
+              >"$RUNNER_TEMP/qemu-uefi.log" 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 124 ]; then
+            cat "$RUNNER_TEMP/qemu-uefi.log"
+            echo "QEMU UEFI boot exited before the smoke-test timeout (status $status)." >&2
+            exit 1
+          fi
+
+      - name: Upload Xperz live ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: Xperz-26.04.1-live-amd64
+          path: build/Xperz.iso
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
